@@ -15,18 +15,40 @@
 
         <!-- 登录界面 -->
         <div id="login-screen" class="screen">
-            <div class="card">
-                <h2>加入游戏</h2>
+            <!-- 创建房间界面 -->
+            <div id="create-room-section" class="card">
+                <h2>创建房间</h2>
                 <div class="form-group">
-                    <label for="player-name-input">你的名字：</label>
-                    <input type="text" id="player-name-input" placeholder="请输入你的名字" maxlength="20">
+                    <label for="player-name-input-create">你的名字：</label>
+                    <input type="text" id="player-name-input-create" placeholder="请输入你的名字" maxlength="20">
+                </div>
+                <button id="create-room-btn" class="btn btn-primary">创建房间</button>
+                <div class="divider">
+                    <span>或</span>
+                </div>
+                <button id="switch-to-join-btn" class="btn btn-secondary">加入已有房间</button>
+                <div id="login-error-create" class="error-message"></div>
+            </div>
+
+            <!-- 加入房间界面 -->
+            <div id="join-room-section" class="card hidden">
+                <h2>加入房间</h2>
+                <div id="room-status-message" class="room-status-message"></div>
+                <div class="form-group">
+                    <label for="player-name-input-join">你的名字：</label>
+                    <input type="text" id="player-name-input-join" placeholder="请输入你的名字" maxlength="20">
                 </div>
                 <div class="form-group">
-                    <label for="game-id-input">房间ID（可选）：</label>
-                    <input type="text" id="game-id-input" placeholder="留空将创建新房间">
+                    <label for="game-id-input">房间ID：</label>
+                    <input type="text" id="game-id-input" placeholder="输入房间ID或通过链接加入" readonly>
+                    <small class="form-hint" id="room-id-hint">房间ID已从链接自动获取</small>
                 </div>
-                <button id="join-btn" class="btn btn-primary">加入游戏</button>
-                <div id="login-error" class="error-message"></div>
+                <button id="join-room-btn" class="btn btn-primary">加入房间</button>
+                <div class="divider">
+                    <span>或</span>
+                </div>
+                <button id="switch-to-create-btn" class="btn btn-secondary">创建新房间</button>
+                <div id="login-error-join" class="error-message"></div>
             </div>
         </div>
 

@@ -13,8 +13,9 @@ socket.on('connect', () => {
 
 socket.on('connect_error', (error) => {
     console.error('[ERROR] Socket.IO 连接失败:', error);
-    if (loginError) {
-        showError(loginError, '无法连接到服务器，请检查网络');
+    const currentError = loginErrorCreate || loginErrorJoin;
+    if (currentError) {
+        showError(currentError, '无法连接到服务器，请检查网络');
     }
 });
 
@@ -54,7 +55,10 @@ let timeLeft = 60;
 
 // DOM元素 - 延迟初始化
 let loginScreen, waitingScreen, gameScreen, gameOverScreen;
-let playerNameInput, gameIdInput, joinBtn, loginError;
+let createRoomSection, joinRoomSection;
+let playerNameInputCreate, playerNameInputJoin, gameIdInput, createRoomBtn, joinRoomBtn;
+let switchToJoinBtn, switchToCreateBtn;
+let loginErrorCreate, loginErrorJoin, roomStatusMessage, roomIdHint;
 let currentPlayersDisplay, playersList, copyLinkBtn, gameLinkDisplay, qrcodeContainer;
 let gamePlayersList, timerDisplay, statusMessage, guessBtn, errorMessage, guessesBody;
 let gameResultTitle, correctNumber, finalGuessesBody, restartBtn, exitBtn, restartStatus;
@@ -66,10 +70,19 @@ function initDOMElements() {
     waitingScreen = document.getElementById('waiting-screen');
     gameScreen = document.getElementById('game-screen');
     gameOverScreen = document.getElementById('game-over-screen');
-    playerNameInput = document.getElementById('player-name-input');
+    createRoomSection = document.getElementById('create-room-section');
+    joinRoomSection = document.getElementById('join-room-section');
+    playerNameInputCreate = document.getElementById('player-name-input-create');
+    playerNameInputJoin = document.getElementById('player-name-input-join');
     gameIdInput = document.getElementById('game-id-input');
-    joinBtn = document.getElementById('join-btn');
-    loginError = document.getElementById('login-error');
+    createRoomBtn = document.getElementById('create-room-btn');
+    joinRoomBtn = document.getElementById('join-room-btn');
+    switchToJoinBtn = document.getElementById('switch-to-join-btn');
+    switchToCreateBtn = document.getElementById('switch-to-create-btn');
+    loginErrorCreate = document.getElementById('login-error-create');
+    loginErrorJoin = document.getElementById('login-error-join');
+    roomStatusMessage = document.getElementById('room-status-message');
+    roomIdHint = document.getElementById('room-id-hint');
     currentPlayersDisplay = document.getElementById('current-players');
     playersList = document.getElementById('players-list');
     copyLinkBtn = document.getElementById('copy-link-btn');
@@ -92,34 +105,58 @@ function initDOMElements() {
     failSound = document.getElementById('fail-sound');
     
     console.log('[DEBUG] DOM元素初始化完成');
-    console.log('[DEBUG] joinBtn存在:', !!joinBtn);
 }
 
 // 初始化事件监听器
 function initializeEventListeners() {
     console.log('[DEBUG] 开始初始化事件监听器');
     
-    // 加入游戏按钮
-    if (joinBtn) {
-        joinBtn.addEventListener('click', handleJoinGame);
-        
-        // 移动端优化：添加触摸事件支持
-        joinBtn.addEventListener('touchend', (e) => {
+    // 创建房间按钮
+    if (createRoomBtn) {
+        createRoomBtn.addEventListener('click', handleCreateRoom);
+        createRoomBtn.addEventListener('touchend', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            handleJoinGame();
+            handleCreateRoom();
         });
-        
-        console.log('[DEBUG] 加入游戏按钮事件已绑定');
-    } else {
-        console.error('[ERROR] 找不到加入游戏按钮元素');
+    }
+    
+    // 加入房间按钮
+    if (joinRoomBtn) {
+        joinRoomBtn.addEventListener('click', handleJoinRoom);
+        joinRoomBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleJoinRoom();
+        });
+    }
+    
+    // 切换按钮
+    if (switchToJoinBtn) {
+        switchToJoinBtn.addEventListener('click', () => {
+            showCreateRoomSection(false);
+        });
+    }
+    
+    if (switchToCreateBtn) {
+        switchToCreateBtn.addEventListener('click', () => {
+            showCreateRoomSection(true);
+        });
     }
     
     // 输入框回车键
-    if (playerNameInput) {
-        playerNameInput.addEventListener('keypress', (e) => {
+    if (playerNameInputCreate) {
+        playerNameInputCreate.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
-                handleJoinGame();
+                handleCreateRoom();
+            }
+        });
+    }
+    
+    if (playerNameInputJoin) {
+        playerNameInputJoin.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                handleJoinRoom();
             }
         });
     }
@@ -127,7 +164,7 @@ function initializeEventListeners() {
     if (gameIdInput) {
         gameIdInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
-                handleJoinGame();
+                handleJoinRoom();
             }
         });
     }
@@ -198,41 +235,35 @@ function initializeEventListeners() {
     console.log('[DEBUG] 事件监听器初始化完成');
 }
 
-// 处理加入游戏
-function handleJoinGame() {
-    console.log('[DEBUG] handleJoinGame 被调用');
+// 处理创建房间
+function handleCreateRoom() {
+    console.log('[DEBUG] handleCreateRoom 被调用');
     
-    if (!playerNameInput) {
-        console.error('[ERROR] playerNameInput 不存在');
+    if (!playerNameInputCreate) {
+        console.error('[ERROR] playerNameInputCreate 不存在');
         return;
     }
     
-    const name = playerNameInput.value.trim();
+    const name = playerNameInputCreate.value.trim();
     if (!name) {
-        console.log('[DEBUG] 名称为空');
-        if (loginError) {
-            showError(loginError, '请输入你的名字');
+        if (loginErrorCreate) {
+            showError(loginErrorCreate, '请输入你的名字');
         }
         return;
     }
     
     playerName = name;
-    gameId = getGameId();
-    window.location.hash = gameId;
+    gameId = generateGameId();
     
-    console.log(`[CLIENT] 加入游戏 - 玩家: ${playerName}, 房间ID: ${gameId}`);
-    console.log('[DEBUG] Socket连接状态:', socket.connected);
+    // 更新URL但不刷新页面
+    const newUrl = `${window.location.origin}${window.location.pathname}?room=${gameId}`;
+    window.history.pushState({}, '', newUrl);
+    
+    console.log(`[CLIENT] 创建房间 - 玩家: ${playerName}, 房间ID: ${gameId}`);
     
     if (!socket.connected) {
-        console.log('[DEBUG] Socket未连接，等待连接...');
-        if (loginError) {
-            showError(loginError, '正在连接服务器，请稍候...');
-        }
         socket.connect();
-        
-        // 等待连接后重试
         socket.once('connect', () => {
-            console.log('[DEBUG] Socket已连接，发送加入请求');
             socket.emit('joinGame', { gameId, playerName });
         });
     } else {
@@ -240,9 +271,61 @@ function handleJoinGame() {
     }
 }
 
+// 处理加入房间
+function handleJoinRoom() {
+    console.log('[DEBUG] handleJoinRoom 被调用');
+    
+    if (!playerNameInputJoin) {
+        console.error('[ERROR] playerNameInputJoin 不存在');
+        return;
+    }
+    
+    const name = playerNameInputJoin.value.trim();
+    if (!name) {
+        if (loginErrorJoin) {
+            showError(loginErrorJoin, '请输入你的名字');
+        }
+        return;
+    }
+    
+    const roomId = gameIdInput ? gameIdInput.value.trim() : '';
+    if (!roomId) {
+        if (loginErrorJoin) {
+            showError(loginErrorJoin, '请输入房间ID');
+        }
+        return;
+    }
+    
+    playerName = name;
+    gameId = roomId;
+    
+    // 更新URL
+    const newUrl = `${window.location.origin}${window.location.pathname}?room=${gameId}`;
+    window.history.pushState({}, '', newUrl);
+    
+    console.log(`[CLIENT] 加入房间 - 玩家: ${playerName}, 房间ID: ${gameId}`);
+    
+    if (!socket.connected) {
+        socket.connect();
+        socket.once('connect', () => {
+            socket.emit('joinGame', { gameId, playerName });
+        });
+    } else {
+        socket.emit('joinGame', { gameId, playerName });
+    }
+}
+
+// 处理加入游戏（向后兼容，保留旧逻辑）
+function handleJoinGame() {
+    // 这个函数保留用于向后兼容，但主要使用 handleCreateRoom 和 handleJoinRoom
+    console.log('[DEBUG] handleJoinGame 被调用（向后兼容）');
+    handleJoinRoom();
+}
+
 // 处理复制链接
 function handleCopyLink() {
-    const inviteLink = `${window.location.origin}${window.location.pathname}#${gameId}`;
+    // 使用query参数格式生成邀请链接
+    const inviteLink = `${window.location.origin}${window.location.pathname}?room=${gameId}`;
     navigator.clipboard.writeText(inviteLink).then(() => {
         if (gameLinkDisplay) {
             gameLinkDisplay.textContent = '链接已复制到剪贴板！';
@@ -265,11 +348,84 @@ function generateGameId() {
     return Date.now().toString(36) + Math.random().toString(36).substring(2, 8);
 }
 
+// 从URL获取房间ID（支持query参数和hash）
+function getRoomIdFromURL() {
+    // 优先从query参数获取
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomParam = urlParams.get('room');
+    if (roomParam) {
+        return roomParam;
+    }
+    
+    // 其次从hash获取
+    const hashId = window.location.hash.slice(1);
+    if (hashId) {
+        return hashId;
+    }
+    
+    return null;
+}
+
 // 获取游戏ID（从URL hash或输入框）
 function getGameId() {
-    const hashId = window.location.hash.slice(1);
+    const urlRoomId = getRoomIdFromURL();
     const inputId = gameIdInput ? gameIdInput.value.trim() : '';
-    return inputId || hashId || generateGameId();
+    return inputId || urlRoomId || generateGameId();
+}
+
+// 检查房间状态
+function checkRoomStatus(roomId, callback) {
+    if (!socket.connected) {
+        socket.connect();
+        socket.once('connect', () => {
+            socket.emit('checkRoomStatus', { gameId: roomId });
+        });
+    } else {
+        socket.emit('checkRoomStatus', { gameId: roomId });
+    }
+    
+    socket.once('roomStatus', (data) => {
+        if (callback) {
+            callback(data);
+        }
+    });
+}
+
+// 显示/隐藏创建房间界面
+function showCreateRoomSection(show) {
+    if (show) {
+        if (createRoomSection) createRoomSection.classList.remove('hidden');
+        if (joinRoomSection) joinRoomSection.classList.add('hidden');
+        // 清除错误消息
+        if (loginErrorCreate) loginErrorCreate.style.display = 'none';
+    } else {
+        if (createRoomSection) createRoomSection.classList.add('hidden');
+        if (joinRoomSection) joinRoomSection.classList.remove('hidden');
+        // 清除错误消息
+        if (loginErrorJoin) loginErrorJoin.style.display = 'none';
+        // 如果房间ID输入框是只读的（从URL自动填充），保持只读；否则允许编辑
+        if (gameIdInput && !gameIdInput.value) {
+            gameIdInput.readOnly = false;
+            if (roomIdHint) roomIdHint.style.display = 'none';
+        }
+    }
+}
+
+// 显示房间状态消息
+function showRoomStatusMessage(message, type = 'info') {
+    if (!roomStatusMessage) return;
+    
+    roomStatusMessage.textContent = message;
+    roomStatusMessage.className = `room-status-message ${type}`;
+    roomStatusMessage.style.display = 'block';
+}
+
+// 隐藏房间状态消息
+function hideRoomStatusMessage() {
+    if (roomStatusMessage) {
+        roomStatusMessage.style.display = 'none';
+        roomStatusMessage.className = 'room-status-message';
+    }
 }
 
 // 显示屏幕
@@ -414,11 +570,19 @@ if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
         initDOMElements();
         initializeEventListeners();
+        // 延迟执行房间检测，确保Socket连接就绪
+        setTimeout(() => {
+            initRoomDetection();
+        }, 200);
     });
 } else {
     // DOM已经加载完成
     initDOMElements();
     initializeEventListeners();
+    // 延迟执行房间检测，确保Socket连接就绪
+    setTimeout(() => {
+        initRoomDetection();
+    }, 200);
 }
 
 // 提交猜测函数
@@ -466,6 +630,13 @@ socket.on('gameJoined', (data) => {
     gameId = data.gameId;
     players = data.players || [];
     
+    // 隐藏房间状态消息
+    hideRoomStatusMessage();
+    
+    // 更新URL
+    const newUrl = `${window.location.origin}${window.location.pathname}?room=${gameId}`;
+    window.history.pushState({}, '', newUrl);
+    
     if (currentPlayersDisplay) {
         currentPlayersDisplay.textContent = `${players.length}/2`;
     }
@@ -474,7 +645,7 @@ socket.on('gameJoined', (data) => {
     
     // 更新邀请链接和二维码
     if (gameId && qrcodeContainer) {
-        const inviteLink = `${window.location.origin}${window.location.pathname}#${gameId}`;
+        const inviteLink = `${window.location.origin}${window.location.pathname}?room=${gameId}`;
         generateQRCode(inviteLink);
     }
     
@@ -682,20 +853,91 @@ socket.on('showWaiting', () => {
 // 错误处理
 socket.on('error', (data) => {
     console.error('[CLIENT] 错误:', data.message);
-    showError(loginError, data.message);
-    showError(errorMessage, data.message);
+    const currentError = loginErrorCreate || loginErrorJoin;
+    if (currentError) {
+        showError(currentError, data.message);
+    }
+    if (errorMessage) {
+        showError(errorMessage, data.message);
+    }
 });
 
 // 连接错误
 socket.on('connect_error', (error) => {
     console.error('[CLIENT] 连接错误:', error);
-    showError(loginError, '连接服务器失败，请检查网络');
-});
-
-// 初始化：检查URL hash
-window.addEventListener('DOMContentLoaded', () => {
-    const hashId = window.location.hash.slice(1);
-    if (hashId) {
-        gameIdInput.value = hashId;
+    const currentError = loginErrorCreate || loginErrorJoin;
+    if (currentError) {
+        showError(currentError, '连接服务器失败，请检查网络');
     }
 });
+
+// 页面加载时自动检测房间
+function initRoomDetection() {
+    const roomId = getRoomIdFromURL();
+    
+    if (roomId) {
+        console.log('[DEBUG] 检测到URL中的房间ID:', roomId);
+        
+        // 显示加入房间界面
+        showCreateRoomSection(false);
+        
+        // 自动填充房间ID
+        if (gameIdInput) {
+            gameIdInput.value = roomId;
+            gameIdInput.readOnly = true;
+        }
+        
+        if (roomIdHint) {
+            roomIdHint.style.display = 'block';
+        }
+        
+        // 检查房间状态
+        if (!socket.connected) {
+            socket.connect();
+            socket.once('connect', () => {
+                checkRoomStatus(roomId, handleRoomStatusResponse);
+            });
+        } else {
+            checkRoomStatus(roomId, handleRoomStatusResponse);
+        }
+    } else {
+        // 没有房间ID，显示创建房间界面
+        showCreateRoomSection(true);
+    }
+}
+
+// 处理房间状态响应
+function handleRoomStatusResponse(status) {
+    console.log('[DEBUG] 房间状态:', status);
+    
+    if (!status.exists) {
+        showRoomStatusMessage('房间不存在，请检查链接是否正确', 'error');
+        if (gameIdInput) {
+            gameIdInput.readOnly = false;
+        }
+        if (roomIdHint) {
+            roomIdHint.style.display = 'none';
+        }
+        return;
+    }
+    
+    if (status.isFull) {
+        showRoomStatusMessage('房间已满（2/2），无法加入', 'warning');
+        if (joinRoomBtn) {
+            joinRoomBtn.disabled = true;
+        }
+    } else {
+        showRoomStatusMessage(`房间可加入（${status.playerCount}/2）`, 'success');
+        if (joinRoomBtn) {
+            joinRoomBtn.disabled = false;
+        }
+        // 自动聚焦到名字输入框
+        if (playerNameInputJoin) {
+            setTimeout(() => {
+                playerNameInputJoin.focus();
+            }, 100);
+        }
+    }
+}
+
+// 这个初始化逻辑已经移到上面的页面加载完成处理中

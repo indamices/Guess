@@ -104,6 +104,36 @@ function handleGameOver(gameId, game) {
 io.on('connection', (socket) => {
     console.log(`[SERVER] 新客户端连接: ${socket.id}`);
 
+    // 检查房间状态
+    socket.on('checkRoomStatus', ({ gameId }) => {
+        console.log(`[SERVER] 检查房间状态: ${gameId}`);
+        
+        if (!gameId || gameId.trim() === '') {
+            socket.emit('roomStatus', {
+                exists: false,
+                isFull: false,
+                playerCount: 0
+            });
+            return;
+        }
+
+        const game = games.get(gameId);
+        if (!game) {
+            socket.emit('roomStatus', {
+                exists: false,
+                isFull: false,
+                playerCount: 0
+            });
+            return;
+        }
+
+        socket.emit('roomStatus', {
+            exists: true,
+            isFull: game.players.length >= 2,
+            playerCount: game.players.length
+        });
+    });
+
     // 玩家加入游戏房间
     socket.on('joinGame', ({ gameId, playerName }) => {
         console.log(`[SERVER] 玩家尝试加入房间: ${gameId}, 名称: ${playerName}`);
