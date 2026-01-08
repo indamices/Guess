@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#667eea">
+    <title>四位数字猜谜游戏</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>四位数字猜谜游戏</h1>
+
+        <!-- 登录界面 -->
+        <div id="login-screen" class="screen">
+            <div class="card">
+                <h2>加入游戏</h2>
+                <div class="form-group">
+                    <label for="player-name-input">你的名字：</label>
+                    <input type="text" id="player-name-input" placeholder="请输入你的名字" maxlength="20">
+                </div>
+                <div class="form-group">
+                    <label for="game-id-input">房间ID（可选）：</label>
+                    <input type="text" id="game-id-input" placeholder="留空将创建新房间">
+                </div>
+                <button id="join-btn" class="btn btn-primary">加入游戏</button>
+                <div id="login-error" class="error-message"></div>
+            </div>
+        </div>
+
+        <!-- 等待界面 -->
+        <div id="waiting-screen" class="screen hidden">
+            <div class="card">
+                <h2>等待另一位玩家加入...</h2>
+                <div class="player-info">
+                    <div>当前玩家：<span id="current-players">1/2</span></div>
+                    <div id="players-list"></div>
+                </div>
+                <div class="invitation-section">
+                    <p>邀请好友加入：</p>
+                    <div class="invite-controls">
+                        <button id="copy-link-btn" class="btn btn-secondary">复制邀请链接</button>
+                        <div id="game-link-display" class="game-link"></div>
+                    </div>
+                    <div id="qrcode-container">
+                        <div id="qrcode"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 游戏界面 -->
+        <div id="game-screen" class="screen hidden">
+            <div class="card">
+                <h2>游戏进行中</h2>
+                <div class="game-info">
+                    <div class="info-item">
+                        <span>玩家：</span>
+                        <span id="game-players-list"></span>
+                    </div>
+                    <div class="info-item">
+                        <span>剩余时间：</span>
+                        <span id="timer-display" class="timer">60</span>秒
+                    </div>
+                </div>
+                <div class="status-message" id="status-message">请等待对方猜测</div>
+                <div class="guess-section">
+                    <input type="tel" id="guess-input" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="输入4位不重复数字" disabled>
+                    <button id="guess-btn" class="btn btn-success" disabled>提交</button>
+                </div>
+                <div id="error-message" class="error-message"></div>
+                <div id="guesses-container">
+                    <table class="guesses-table">
+                        <thead>
+                            <tr>
+                                <th>玩家</th>
+                                <th>猜测</th>
+                                <th>结果</th>
+                            </tr>
+                        </thead>
+                        <tbody id="guesses-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 游戏结束界面 -->
+        <div id="game-over-screen" class="screen hidden">
+            <div class="card">
+                <h2 id="game-result-title"></h2>
+                <div class="result-info">
+                    <p>正确数字是：<span id="correct-number" class="highlight"></span></p>
+                </div>
+                <div id="final-guesses-container">
+                    <h3>游戏记录</h3>
+                    <table class="guesses-table">
+                        <thead>
+                            <tr>
+                                <th>玩家</th>
+                                <th>猜测</th>
+                                <th>结果</th>
+                            </tr>
+                        </thead>
+                        <tbody id="final-guesses-body"></tbody>
+                    </table>
+                </div>
+                <div class="action-buttons">
+                    <button id="restart-btn" class="btn btn-primary">再来一局</button>
+                    <button id="exit-btn" class="btn btn-danger">退出</button>
+                </div>
+                <div id="restart-status" class="restart-status"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 提示音 -->
+    <audio id="turn-sound" src="turn-sound.mp3" preload="auto"></audio>
+    <audio id="victory-sound" src="victory.mp3" preload="auto"></audio>
+    <audio id="fail-sound" src="fail.mp3" preload="auto"></audio>
+
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

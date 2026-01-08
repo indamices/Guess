@@ -1,0 +1,33 @@
+# 依赖
+node_modules/
+package-lock.json
+
+# 日志
+*.log
+npm-debug.log*
+
+# 环境变量
+.env
+.env.local
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 临时文件
+*.tmp
+*.temp
+test-fix.html
+
+# 旧版本（可选，如果你想保留可以删除这行）
+VS Code版/
+
+# 其他
+新建 文本文档.txt

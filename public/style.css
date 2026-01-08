@@ -1,0 +1,601 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    color: #333;
+}
+
+.container {
+    width: 100%;
+    max-width: 800px;
+}
+
+h1 {
+    text-align: center;
+    color: white;
+    margin-bottom: 30px;
+    font-size: 2.5em;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+h2 {
+    margin-bottom: 20px;
+    color: #333;
+    font-size: 1.8em;
+}
+
+h3 {
+    margin: 20px 0 10px 0;
+    color: #555;
+}
+
+.screen {
+    animation: fadeIn 0.3s ease-in;
+}
+
+.screen.hidden {
+    display: none;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.card {
+    background: white;
+    border-radius: 15px;
+    padding: 30px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+/* 表单样式 */
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #555;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    font-size: 16px;
+    transition: border-color 0.3s;
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+/* 按钮样式 */
+.btn {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+    margin: 5px;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+.btn:active {
+    transform: translateY(0);
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+}
+
+.btn-success {
+    background: #28a745;
+    color: white;
+}
+
+.btn-danger {
+    background: #dc3545;
+    color: white;
+}
+
+.btn:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* 错误消息 */
+.error-message {
+    color: #dc3545;
+    margin-top: 10px;
+    padding: 10px;
+    background: #f8d7da;
+    border-radius: 5px;
+    display: none;
+}
+
+/* 等待界面 */
+.player-info {
+    margin: 20px 0;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.player-item {
+    padding: 8px;
+    margin: 5px 0;
+    background: white;
+    border-radius: 5px;
+    display: inline-block;
+    margin-right: 10px;
+}
+
+.invitation-section {
+    margin-top: 30px;
+    text-align: center;
+}
+
+.invite-controls {
+    margin: 20px 0;
+}
+
+.game-link {
+    margin-top: 10px;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 5px;
+    word-break: break-all;
+    display: none;
+}
+
+#qrcode-container {
+    margin-top: 20px;
+    display: flex;
+    justify-content: center;
+}
+
+#qrcode canvas {
+    border: 5px solid white;
+    border-radius: 10px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+/* 游戏界面 */
+.game-info {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    flex-wrap: wrap;
+}
+
+.info-item {
+    margin: 5px 0;
+}
+
+.timer {
+    font-size: 1.5em;
+    font-weight: bold;
+    color: #dc3545;
+}
+
+.status-message {
+    text-align: center;
+    padding: 15px;
+    margin: 20px 0;
+    border-radius: 8px;
+    font-size: 1.1em;
+    background: #e9ecef;
+}
+
+.status-message.your-turn {
+    background: #d4edda;
+    color: #155724;
+    font-weight: 600;
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
+}
+
+.guess-section {
+    display: flex;
+    gap: 10px;
+    margin: 20px 0;
+}
+
+#guess-input {
+    flex: 1;
+    padding: 12px;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    font-size: 18px;
+    text-align: center;
+    letter-spacing: 0.2em;
+}
+
+#guess-input:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+/* 猜测记录表格 */
+#guesses-container, #final-guesses-container {
+    margin-top: 20px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.guesses-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+}
+
+.guesses-table thead {
+    background: #667eea;
+    color: white;
+    position: sticky;
+    top: 0;
+}
+
+.guesses-table th,
+.guesses-table td {
+    padding: 12px;
+    text-align: center;
+    border-bottom: 1px solid #ddd;
+}
+
+.guesses-table tbody tr:hover {
+    background: #f8f9fa;
+}
+
+.my-guess {
+    background: #d4edda;
+}
+
+.opponent-guess {
+    background: #f8d7da;
+}
+
+/* 游戏结束界面 */
+.result-info {
+    text-align: center;
+    margin: 20px 0;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.highlight {
+    font-size: 2em;
+    font-weight: bold;
+    color: #667eea;
+    letter-spacing: 0.2em;
+}
+
+.winner {
+    color: #28a745;
+}
+
+.loser {
+    color: #dc3545;
+}
+
+.action-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 30px;
+    flex-wrap: wrap;
+}
+
+.restart-status {
+    margin-top: 20px;
+    padding: 15px;
+    background: #fff3cd;
+    border-radius: 8px;
+    text-align: center;
+    display: none;
+}
+
+/* 轮到你时的闪烁效果 */
+.your-turn-highlight {
+    animation: flash 1s ease-in-out;
+}
+
+@keyframes flash {
+    0%, 100% {
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    }
+    50% {
+        box-shadow: 0 10px 40px rgba(102, 126, 234, 0.5);
+    }
+}
+
+/* 移动端优化 - 触摸友好的设计 */
+@media (max-width: 768px) {
+    body {
+        padding: 10px;
+        align-items: flex-start;
+        padding-top: 10px;
+    }
+
+    h1 {
+        font-size: 1.8em;
+        margin-bottom: 20px;
+    }
+
+    h2 {
+        font-size: 1.5em;
+    }
+
+    .card {
+        padding: 20px 15px;
+        border-radius: 12px;
+    }
+
+    /* 更大的触摸目标 */
+    .btn {
+        width: 100%;
+        padding: 16px 24px;
+        font-size: 18px;
+        margin: 8px 0;
+        min-height: 48px; /* 确保符合触摸目标最小尺寸 */
+        -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+    }
+
+    .form-group input {
+        padding: 16px;
+        font-size: 18px;
+        min-height: 48px;
+    }
+
+    #guess-input {
+        font-size: 24px;
+        padding: 16px;
+        min-height: 56px;
+        letter-spacing: 0.3em;
+    }
+
+    #guess-btn {
+        min-height: 56px;
+        font-size: 20px;
+        font-weight: 700;
+    }
+
+    .game-info {
+        flex-direction: column;
+        gap: 10px;
+        padding: 12px;
+    }
+
+    .info-item {
+        font-size: 16px;
+    }
+
+    .timer {
+        font-size: 1.8em;
+    }
+
+    .status-message {
+        padding: 18px;
+        font-size: 1.2em;
+        margin: 15px 0;
+    }
+
+    .guess-section {
+        flex-direction: column;
+        gap: 12px;
+        margin: 15px 0;
+    }
+
+    .action-buttons {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    /* 优化表格显示 */
+    .guesses-table {
+        font-size: 14px;
+    }
+
+    .guesses-table th,
+    .guesses-table td {
+        padding: 10px 8px;
+        font-size: 14px;
+    }
+
+    #guesses-container, #final-guesses-container {
+        max-height: 300px;
+        margin-top: 15px;
+    }
+
+    /* 优化玩家信息显示 */
+    .player-info {
+        padding: 12px;
+        margin: 15px 0;
+    }
+
+    .player-item {
+        padding: 10px 15px;
+        margin: 5px 5px 5px 0;
+        font-size: 16px;
+    }
+
+    /* 优化邀请区域 */
+    .invitation-section {
+        margin-top: 20px;
+    }
+
+    #qrcode canvas {
+        max-width: 100%;
+        height: auto;
+    }
+
+    /* 优化结果显示 */
+    .highlight {
+        font-size: 1.8em;
+        letter-spacing: 0.15em;
+    }
+
+    .result-info {
+        padding: 15px;
+        margin: 15px 0;
+    }
+
+    /* 防止文本选择（移动端优化） */
+    .btn, #guess-input {
+        -webkit-user-select: none;
+        user-select: none;
+    }
+
+    /* 优化卡片阴影（移动端性能） */
+    .card {
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    }
+}
+
+/* 小屏幕手机优化 */
+@media (max-width: 480px) {
+    h1 {
+        font-size: 1.5em;
+        margin-bottom: 15px;
+    }
+
+    h2 {
+        font-size: 1.3em;
+    }
+
+    .card {
+        padding: 15px 12px;
+    }
+
+    .btn {
+        padding: 14px 20px;
+        font-size: 16px;
+    }
+
+    #guess-input {
+        font-size: 22px;
+        padding: 14px;
+    }
+
+    .guesses-table {
+        font-size: 12px;
+    }
+
+    .guesses-table th,
+    .guesses-table td {
+        padding: 8px 6px;
+        font-size: 12px;
+    }
+
+    .timer {
+        font-size: 1.5em;
+    }
+
+    .status-message {
+        font-size: 1.1em;
+        padding: 15px;
+    }
+
+    #qrcode canvas {
+        width: 180px;
+        height: 180px;
+    }
+}
+
+/* 横屏优化 */
+@media (max-width: 768px) and (orientation: landscape) {
+    body {
+        padding: 5px;
+    }
+
+    h1 {
+        font-size: 1.5em;
+        margin-bottom: 10px;
+    }
+
+    .card {
+        padding: 15px;
+    }
+
+    #guesses-container, #final-guesses-container {
+        max-height: 200px;
+    }
+}
+
+/* 触摸反馈优化 */
+@media (hover: none) and (pointer: coarse) {
+    .btn:active {
+        transform: scale(0.98);
+        opacity: 0.9;
+    }
+
+    .btn:hover {
+        transform: none; /* 移动端不需要hover效果 */
+    }
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}

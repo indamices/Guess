@@ -1,0 +1,18 @@
+{
+  "name": "guess-number-game",
+  "version": "2.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "node test-local.js"
+  },
+  "keywords": ["game", "multiplayer", "guess-number"],
+  "author": "",
+  "license": "ISC",
+  "description": "在线多人猜数字游戏",
+  "dependencies": {
+    "express": "^4.21.2",
+    "socket.io": "^4.8.1"
+  }
+}
