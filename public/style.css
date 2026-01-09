@@ -325,6 +325,52 @@ h3 {
     color: #dc3545;
 }
 
+/* 对手退出选择界面 */
+#opponent-left-screen .opponent-info {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+#opponent-left-screen .opponent-info p {
+    margin: 10px 0;
+    font-size: 1.1em;
+    color: #666;
+}
+
+/* 等待重连界面 */
+#waiting-reconnect-screen .reconnect-info {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+#waiting-reconnect-screen .reconnect-info p {
+    margin: 10px 0;
+    font-size: 1.1em;
+    color: #666;
+}
+
+#waiting-reconnect-screen .reconnect-timer {
+    font-size: 2em;
+    font-weight: bold;
+    color: #667eea;
+}
+
+/* 加载动画 */
+.loading-spinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #667eea;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    animation: spin 1s linear infinite;
+    margin: 20px auto;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
 .action-buttons {
     display: flex;
     justify-content: center;
@@ -680,4 +726,25 @@ h3 {
 .form-group input[readonly] {
     background-color: #f8f9fa;
     cursor: not-allowed;
+}
+
+/* 单人游戏统计信息 */
+.single-player-stats {
+    margin: 20px 0;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.single-player-stats p {
+    margin: 10px 0;
+    font-size: 1.1em;
+    color: #555;
+}
+
+.single-player-stats .highlight {
+    color: #667eea;
+    font-weight: 600;
+    font-size: 1.2em;
 }

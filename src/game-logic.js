@@ -6,6 +6,7 @@ class Game {
     this.currentPlayerIndex = 0;  // 当前玩家索引
     this.restartRequests = new Set();  // 重启请求集合
     this.isGameStarted = false;  // 游戏是否已开始
+    this.practiceMode = false;   // 是否为练习模式
   }
 
   // 生成4位不重复数字
@@ -19,7 +20,8 @@ class Game {
 
   // 添加玩家
   addPlayer(player) {
-    if (this.players.length >= 2) {
+    // 练习模式下不限制玩家数量
+    if (!this.practiceMode && this.players.length >= 2) {
       throw new Error('房间已满');
     }
     // 检查是否已存在同名玩家
@@ -43,11 +45,17 @@ class Game {
 
   // 开始游戏
   start() {
-    if (this.players.length !== 2) {
+    // 练习模式下不限制玩家数量
+    if (!this.practiceMode && this.players.length !== 2) {
       throw new Error('需要2位玩家才能开始游戏');
     }
     this.isGameStarted = true;
-    this.currentPlayerIndex = Math.random() < 0.5 ? 0 : 1;
+    // 练习模式下始终是第一个玩家
+    if (this.practiceMode) {
+      this.currentPlayerIndex = 0;
+    } else {
+      this.currentPlayerIndex = Math.random() < 0.5 ? 0 : 1;
+    }
     return this.getCurrentPlayer();
   }
 
@@ -59,6 +67,10 @@ class Game {
 
   // 切换到下一个玩家
   switchPlayer() {
+    // 练习模式下不切换玩家
+    if (this.practiceMode) {
+      return this.getCurrentPlayer();
+    }
     if (this.players.length === 2) {
       this.currentPlayerIndex = (this.currentPlayerIndex + 1) % 2;
     }
@@ -71,14 +83,17 @@ class Game {
       throw new Error('玩家不在本局游戏中');
     }
 
-    // 检查是否轮到该玩家
-    const currentPlayer = this.getCurrentPlayer();
-    if (currentPlayer.id !== playerId) {
-      throw new Error('还没轮到你');
+    // 练习模式下不检查轮次
+    if (!this.practiceMode) {
+      // 检查是否轮到该玩家
+      const currentPlayer = this.getCurrentPlayer();
+      if (currentPlayer.id !== playerId) {
+        throw new Error('还没轮到你');
+      }
     }
 
-    // 处理超时
-    if (guess === 'timeout') {
+    // 处理超时（练习模式下不处理超时）
+    if (!this.practiceMode && guess === 'timeout') {
       this.guesses.push({ 
         player: playerId, 
         guess: '超时', 
@@ -103,8 +118,8 @@ class Game {
       timestamp: Date.now()
     });
     
-    // 如果没猜中，切换玩家
-    if (result.a !== 4) {
+    // 如果没猜中，切换玩家（练习模式下不切换）
+    if (!this.practiceMode && result.a !== 4) {
       this.switchPlayer();
     }
     

@@ -52,17 +52,59 @@ let playerName = null;
 let players = [];
 let timerInterval = null;
 let timeLeft = 60;
+let isJoiningRoom = false; // 标志：是否正在加入房间（防止自动检测干扰）
+
+// Token管理函数
+function savePlayerToken(gameId, token) {
+    try {
+        localStorage.setItem(`player_token_${gameId}`, token);
+        console.log(`[CLIENT] Token已保存: ${gameId}`);
+    } catch (e) {
+        console.error('[ERROR] 保存Token失败:', e);
+    }
+}
+
+function getPlayerToken(gameId) {
+    try {
+        return localStorage.getItem(`player_token_${gameId}`);
+    } catch (e) {
+        console.error('[ERROR] 获取Token失败:', e);
+        return null;
+    }
+}
+
+function removePlayerToken(gameId) {
+    try {
+        localStorage.removeItem(`player_token_${gameId}`);
+        console.log(`[CLIENT] Token已删除: ${gameId}`);
+    } catch (e) {
+        console.error('[ERROR] 删除Token失败:', e);
+    }
+}
+
+// 单人游戏状态
+let isSinglePlayerMode = false;
+let singlePlayerGame = null; // 单人游戏实例
+let singlePlayerStartTime = null;
+let singlePlayerGuessCount = 0;
 
 // DOM元素 - 延迟初始化
-let loginScreen, waitingScreen, gameScreen, gameOverScreen;
+let loginScreen, waitingScreen, gameScreen, gameOverScreen, opponentLeftScreen, waitingReconnectScreen;
 let createRoomSection, joinRoomSection;
 let playerNameInputCreate, playerNameInputJoin, gameIdInput, createRoomBtn, joinRoomBtn;
-let switchToJoinBtn, switchToCreateBtn;
+let switchToJoinBtn, switchToCreateBtn, singlePlayerBtn;
 let loginErrorCreate, loginErrorJoin, roomStatusMessage, roomIdHint;
 let currentPlayersDisplay, playersList, copyLinkBtn, gameLinkDisplay, qrcodeContainer;
 let gamePlayersList, timerDisplay, statusMessage, guessBtn, errorMessage, guessesBody;
 let gameResultTitle, correctNumber, finalGuessesBody, restartBtn, exitBtn, restartStatus;
+let opponentNameDisplay, waitOpponentBtn, practiceModeBtn, quitGameBtn;
+let reconnectOpponentName, reconnectTimer;
 let turnSound, victorySound, failSound;
+
+// Token和重连状态
+let playerToken = null; // 当前玩家的token
+let reconnectTimeoutTimer = null; // 等待重连倒计时
+let isPracticeMode = false; // 是否处于练习模式
 
 // 初始化所有DOM元素
 function initDOMElements() {
@@ -79,6 +121,7 @@ function initDOMElements() {
     joinRoomBtn = document.getElementById('join-room-btn');
     switchToJoinBtn = document.getElementById('switch-to-join-btn');
     switchToCreateBtn = document.getElementById('switch-to-create-btn');
+    singlePlayerBtn = document.getElementById('single-player-btn');
     loginErrorCreate = document.getElementById('login-error-create');
     loginErrorJoin = document.getElementById('login-error-join');
     roomStatusMessage = document.getElementById('room-status-message');
@@ -103,6 +146,16 @@ function initDOMElements() {
     turnSound = document.getElementById('turn-sound');
     victorySound = document.getElementById('victory-sound');
     failSound = document.getElementById('fail-sound');
+    
+    // 对手退出和等待重连界面元素
+    opponentLeftScreen = document.getElementById('opponent-left-screen');
+    waitingReconnectScreen = document.getElementById('waiting-reconnect-screen');
+    opponentNameDisplay = document.getElementById('opponent-name-display');
+    waitOpponentBtn = document.getElementById('wait-opponent-btn');
+    practiceModeBtn = document.getElementById('practice-mode-btn');
+    quitGameBtn = document.getElementById('quit-game-btn');
+    reconnectOpponentName = document.getElementById('reconnect-opponent-name');
+    reconnectTimer = document.getElementById('reconnect-timer');
     
     console.log('[DEBUG] DOM元素初始化完成');
 }
@@ -141,6 +194,16 @@ function initializeEventListeners() {
     if (switchToCreateBtn) {
         switchToCreateBtn.addEventListener('click', () => {
             showCreateRoomSection(true);
+        });
+    }
+    
+    // 单人游戏按钮
+    if (singlePlayerBtn) {
+        singlePlayerBtn.addEventListener('click', handleSinglePlayer);
+        singlePlayerBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleSinglePlayer();
         });
     }
     
@@ -205,26 +268,68 @@ function initializeEventListeners() {
         copyLinkBtn.addEventListener('click', handleCopyLink);
     }
     
-    // 再来一局按钮
+    // 再来一局按钮（多人模式）
     if (restartBtn) {
         restartBtn.addEventListener('click', () => {
-            socket.emit('restartGame');
-            if (restartStatus) {
-                restartStatus.textContent = '已请求再来一局，等待对方确认...';
-                restartStatus.style.display = 'block';
+            // 如果是单人模式，已经在handleSinglePlayerGameOver中设置了onclick
+            if (!isSinglePlayerMode) {
+                socket.emit('restartGame');
+                if (restartStatus) {
+                    restartStatus.textContent = '已请求再来一局，等待对方确认...';
+                    restartStatus.style.display = 'block';
+                }
             }
         });
     }
     
-    // 退出按钮
+    // 退出按钮（多人模式）
     if (exitBtn) {
         exitBtn.addEventListener('click', () => {
-            socket.emit('exitGame');
+            // 如果是单人模式，已经在handleSinglePlayerGameOver中设置了onclick
+            if (!isSinglePlayerMode) {
+                socket.emit('exitGame');
+                showScreen('login');
+                // 重置状态
+                gameId = null;
+                playerName = null;
+                players = [];
+                playerToken = null;
+                isPracticeMode = false;
+                stopTimer();
+                if (guessesBody) guessesBody.innerHTML = '';
+                if (finalGuessesBody) finalGuessesBody.innerHTML = '';
+                window.location.hash = '';
+            }
+        });
+    }
+    
+    // 对手退出选择按钮
+    if (waitOpponentBtn) {
+        waitOpponentBtn.addEventListener('click', () => {
+            socket.emit('playerChoice', { choice: 'wait' });
+        });
+    }
+    
+    if (practiceModeBtn) {
+        practiceModeBtn.addEventListener('click', () => {
+            socket.emit('playerChoice', { choice: 'practice' });
+        });
+    }
+    
+    if (quitGameBtn) {
+        quitGameBtn.addEventListener('click', () => {
+            socket.emit('playerChoice', { choice: 'quit' });
+            // 先清理token，再重置gameId
+            if (gameId) {
+                removePlayerToken(gameId);
+            }
             showScreen('login');
             // 重置状态
             gameId = null;
             playerName = null;
             players = [];
+            playerToken = null;
+            isPracticeMode = false;
             stopTimer();
             if (guessesBody) guessesBody.innerHTML = '';
             if (finalGuessesBody) finalGuessesBody.innerHTML = '';
@@ -254,20 +359,64 @@ function handleCreateRoom() {
     
     playerName = name;
     gameId = generateGameId();
-    
-    // 更新URL但不刷新页面
-    const newUrl = `${window.location.origin}${window.location.pathname}?room=${gameId}`;
-    window.history.pushState({}, '', newUrl);
+    isJoiningRoom = true; // 设置标志，防止自动检测干扰
     
     console.log(`[CLIENT] 创建房间 - 玩家: ${playerName}, 房间ID: ${gameId}`);
     
+    // 清除错误消息
+    if (loginErrorCreate) {
+        loginErrorCreate.style.display = 'none';
+    }
+    
+    // 确保Socket连接
+    const joinRoom = () => {
+        console.log('[DEBUG] ========== 发送加入房间请求 ==========');
+        console.log('[DEBUG] gameId:', gameId);
+        console.log('[DEBUG] playerName:', playerName);
+        console.log('[DEBUG] Socket连接状态:', socket.connected);
+        
+        // 设置一个超时，如果3秒内没有收到gameJoined事件，强制显示等待界面
+        const timeoutId = setTimeout(() => {
+            console.warn('[WARN] 3秒内未收到gameJoined事件，强制显示等待界面');
+            if (waitingScreen) {
+                showScreen('waiting');
+                if (currentPlayersDisplay) {
+                    currentPlayersDisplay.textContent = '1/2';
+                }
+                if (gameId && qrcodeContainer) {
+                    const inviteLink = `${window.location.origin}${window.location.pathname}?room=${gameId}`;
+                    generateQRCode(inviteLink);
+                }
+            }
+        }, 3000);
+        
+        // 当收到gameJoined事件时，清除超时
+        socket.once('gameJoined', () => {
+            clearTimeout(timeoutId);
+        });
+        
+        // 尝试从localStorage获取token（重连时）
+        const token = getPlayerToken(gameId);
+        socket.emit('joinGame', { gameId, playerName, token });
+        console.log('[DEBUG] joinGame 事件已发送', { gameId, playerName, token: token ? 'provided' : 'not provided' });
+    };
+    
     if (!socket.connected) {
+        console.log('[DEBUG] Socket未连接，等待连接...');
+        if (loginErrorCreate) {
+            showError(loginErrorCreate, '正在连接服务器，请稍候...');
+        }
         socket.connect();
         socket.once('connect', () => {
-            socket.emit('joinGame', { gameId, playerName });
+            console.log('[DEBUG] Socket连接成功，准备加入房间');
+            if (loginErrorCreate) {
+                loginErrorCreate.style.display = 'none';
+            }
+            joinRoom();
         });
     } else {
-        socket.emit('joinGame', { gameId, playerName });
+        console.log('[DEBUG] Socket已连接，直接加入房间');
+        joinRoom();
     }
 }
 
@@ -298,6 +447,7 @@ function handleJoinRoom() {
     
     playerName = name;
     gameId = roomId;
+    isJoiningRoom = true; // 设置标志，防止自动检测干扰
     
     // 更新URL
     const newUrl = `${window.location.origin}${window.location.pathname}?room=${gameId}`;
@@ -305,13 +455,22 @@ function handleJoinRoom() {
     
     console.log(`[CLIENT] 加入房间 - 玩家: ${playerName}, 房间ID: ${gameId}`);
     
+    // 清除错误消息
+    if (loginErrorJoin) {
+        loginErrorJoin.style.display = 'none';
+    }
+    
     if (!socket.connected) {
         socket.connect();
         socket.once('connect', () => {
-            socket.emit('joinGame', { gameId, playerName });
+            // 尝试从localStorage获取token（重连时）
+            const token = getPlayerToken(gameId);
+            socket.emit('joinGame', { gameId, playerName, token });
         });
     } else {
-        socket.emit('joinGame', { gameId, playerName });
+        // 尝试从localStorage获取token（重连时）
+        const token = getPlayerToken(gameId);
+        socket.emit('joinGame', { gameId, playerName, token });
     }
 }
 
@@ -320,6 +479,169 @@ function handleJoinGame() {
     // 这个函数保留用于向后兼容，但主要使用 handleCreateRoom 和 handleJoinRoom
     console.log('[DEBUG] handleJoinGame 被调用（向后兼容）');
     handleJoinRoom();
+}
+
+// 处理单人游戏
+function handleSinglePlayer() {
+    console.log('[DEBUG] handleSinglePlayer 被调用');
+    
+    if (!playerNameInputCreate) {
+        console.error('[ERROR] playerNameInputCreate 不存在');
+        return;
+    }
+    
+    const name = playerNameInputCreate.value.trim();
+    if (!name) {
+        if (loginErrorCreate) {
+            showError(loginErrorCreate, '请输入你的名字');
+        }
+        return;
+    }
+    
+    playerName = name || '玩家';
+    isSinglePlayerMode = true;
+    singlePlayerGuessCount = 0;
+    singlePlayerStartTime = Date.now();
+    
+    // 创建单人游戏实例（使用Game类，但只添加一个玩家）
+    // 由于Game类需要服务器端，我们创建一个简化的单人游戏逻辑
+    singlePlayerGame = {
+        targetNumber: generateSinglePlayerTarget(),
+        guesses: [],
+        isGameOver: false
+    };
+    
+    console.log('[DEBUG] 单人游戏开始，目标数字:', singlePlayerGame.targetNumber);
+    
+    // 清除错误消息
+    if (loginErrorCreate) {
+        loginErrorCreate.style.display = 'none';
+    }
+    
+    // 直接进入游戏界面
+    showScreen('game');
+    
+    // 更新界面以适配单人模式
+    updateUIForSinglePlayer();
+    
+    // 启用输入框
+    const guessInput = document.getElementById('guess-input');
+    const guessBtn = document.getElementById('guess-btn');
+    if (guessInput) {
+        guessInput.disabled = false;
+        guessInput.focus();
+    }
+    if (guessBtn) {
+        guessBtn.disabled = false;
+    }
+    
+    // 更新状态消息
+    if (statusMessage) {
+        statusMessage.textContent = '开始猜测吧！';
+    }
+}
+
+// 生成单人游戏目标数字
+function generateSinglePlayerTarget() {
+    const digits = new Set();
+    while (digits.size < 4) {
+        digits.add(Math.floor(Math.random() * 10));
+    }
+    return Array.from(digits).join('');
+}
+
+// 计算A和B结果
+function calculateSinglePlayerResult(guess, target) {
+    let a = 0, b = 0;
+    for (let i = 0; i < 4; i++) {
+        if (guess[i] === target[i]) {
+            a++;
+        } else if (target.includes(guess[i])) {
+            b++;
+        }
+    }
+    return { a, b };
+}
+
+// 更新界面以适配单人模式
+function updateUIForSinglePlayer() {
+    // 更新玩家列表显示
+    if (gamePlayersList) {
+        gamePlayersList.textContent = playerName;
+    }
+    
+    // 更新计时器显示为猜测次数
+    const gameInfo = document.querySelector('.game-info');
+    if (gameInfo) {
+        const infoItems = gameInfo.querySelectorAll('.info-item');
+        if (infoItems.length > 0) {
+            // 更新第一个信息项（玩家信息）
+            if (infoItems[0]) {
+                const span = infoItems[0].querySelector('span:last-child');
+                if (span) {
+                    span.textContent = playerName;
+                }
+            }
+            // 更新第二个信息项（计时器改为猜测次数）
+            if (infoItems.length > 1 && infoItems[1]) {
+                const label = infoItems[1].querySelector('span:first-child');
+                const value = infoItems[1].querySelector('span:last-child');
+                if (label) {
+                    label.textContent = '猜测次数：';
+                }
+                if (value) {
+                    value.textContent = singlePlayerGuessCount || '0';
+                    // 移除timer class，因为现在是猜测次数
+                    value.classList.remove('timer');
+                    value.id = 'timer-display'; // 确保ID正确
+                }
+                // 隐藏或移除"秒"文本（如果存在）
+                const infoItem = infoItems[1];
+                if (infoItem) {
+                    // 查找所有文本节点，移除包含"秒"的文本
+                    const walker = document.createTreeWalker(
+                        infoItem,
+                        NodeFilter.SHOW_TEXT,
+                        null,
+                        false
+                    );
+                    let node;
+                    while (node = walker.nextNode()) {
+                        if (node.textContent.trim() === '秒') {
+                            node.textContent = '';
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // 直接更新timerDisplay（如果存在）
+    if (timerDisplay) {
+        timerDisplay.textContent = singlePlayerGuessCount || '0';
+        timerDisplay.classList.remove('timer');
+    }
+    
+    // 更新状态消息
+    if (statusMessage) {
+        statusMessage.textContent = '开始猜测吧！';
+    }
+    
+    // 清空猜测记录
+    if (guessesBody) {
+        guessesBody.innerHTML = '';
+    }
+    
+    // 确保输入框和按钮可用
+    const guessInput = document.getElementById('guess-input');
+    const guessBtn = document.getElementById('guess-btn');
+    if (guessInput) {
+        guessInput.disabled = false;
+        guessInput.placeholder = '输入4位不重复数字';
+    }
+    if (guessBtn) {
+        guessBtn.disabled = false;
+    }
 }
 
 // 处理复制链接
@@ -430,11 +752,31 @@ function hideRoomStatusMessage() {
 
 // 显示屏幕
 function showScreen(screenName) {
-    console.log('[DEBUG] showScreen 被调用:', screenName);
-    const screens = [loginScreen, waitingScreen, gameScreen, gameOverScreen];
-    screens.forEach(screen => {
+    console.log('[DEBUG] ========== showScreen 被调用 ==========');
+    console.log('[DEBUG] 目标屏幕:', screenName);
+    
+    // 重新获取DOM元素，确保它们是最新的
+    if (!loginScreen) loginScreen = document.getElementById('login-screen');
+    if (!waitingScreen) waitingScreen = document.getElementById('waiting-screen');
+    if (!gameScreen) gameScreen = document.getElementById('game-screen');
+    if (!gameOverScreen) gameOverScreen = document.getElementById('game-over-screen');
+    if (!opponentLeftScreen) opponentLeftScreen = document.getElementById('opponent-left-screen');
+    if (!waitingReconnectScreen) waitingReconnectScreen = document.getElementById('waiting-reconnect-screen');
+    
+    console.log('[DEBUG] loginScreen:', loginScreen);
+    console.log('[DEBUG] waitingScreen:', waitingScreen);
+    console.log('[DEBUG] gameScreen:', gameScreen);
+    console.log('[DEBUG] gameOverScreen:', gameOverScreen);
+    
+    const screens = [loginScreen, waitingScreen, gameScreen, gameOverScreen, opponentLeftScreen, waitingReconnectScreen];
+    screens.forEach((screen, index) => {
         if (screen) {
+            console.log(`[DEBUG] 隐藏屏幕 ${index}:`, screen.id || 'unknown');
             screen.classList.add('hidden');
+            // 强制设置display为none，确保隐藏
+            screen.style.display = 'none';
+        } else {
+            console.warn(`[WARN] 屏幕 ${index} 元素不存在`);
         }
     });
     
@@ -452,13 +794,46 @@ function showScreen(screenName) {
         case 'gameOver':
             targetScreen = gameOverScreen;
             break;
+        case 'opponent-left':
+            targetScreen = opponentLeftScreen;
+            break;
+        case 'waiting-reconnect':
+            targetScreen = waitingReconnectScreen;
+            break;
     }
     
     if (targetScreen) {
+        console.log('[DEBUG] 显示目标屏幕:', targetScreen.id || 'unknown');
         targetScreen.classList.remove('hidden');
-        console.log('[DEBUG] 屏幕已切换到:', screenName);
+        // 强制设置display，确保显示
+        targetScreen.style.display = 'block';
+        console.log('[DEBUG] 屏幕切换完成，当前classList:', targetScreen.classList.toString());
+        console.log('[DEBUG] 屏幕display样式:', targetScreen.style.display);
+        console.log('[DEBUG] ========== showScreen 完成 ==========');
     } else {
         console.error('[ERROR] 找不到目标屏幕:', screenName);
+        console.error('[ERROR] 所有屏幕元素:', { loginScreen, waitingScreen, gameScreen, gameOverScreen });
+        // 如果找不到目标屏幕，尝试通过ID直接获取
+        const screenId = screenName === 'login' ? 'login-screen' :
+                         screenName === 'waiting' ? 'waiting-screen' :
+                         screenName === 'game' ? 'game-screen' :
+                         screenName === 'gameOver' ? 'game-over-screen' :
+                         screenName === 'opponent-left' ? 'opponent-left-screen' :
+                         screenName === 'waiting-reconnect' ? 'waiting-reconnect-screen' : null;
+        if (screenId) {
+            const fallbackScreen = document.getElementById(screenId);
+            if (fallbackScreen) {
+                console.log('[DEBUG] 使用备用方法获取屏幕元素');
+                // 隐藏所有屏幕
+                document.querySelectorAll('.screen').forEach(s => {
+                    s.classList.add('hidden');
+                    s.style.display = 'none';
+                });
+                // 显示目标屏幕
+                fallbackScreen.classList.remove('hidden');
+                fallbackScreen.style.display = 'block';
+            }
+        }
     }
 }
 
@@ -606,12 +981,228 @@ function submitGuess() {
     if (errorMessage) {
         errorMessage.textContent = '';
     }
-    socket.emit('makeGuess', { guess });
-    guessInput.disabled = true;
-    if (guessBtn) {
-        guessBtn.disabled = true;
+    
+    // 如果是单人模式，使用本地逻辑
+    if (isSinglePlayerMode && singlePlayerGame) {
+        handleSinglePlayerGuess(guess);
+    } else if (isPracticeMode) {
+        // 练习模式，发送到服务器（不限时）
+        socket.emit('makeGuess', { guess });
+        guessInput.disabled = false; // 练习模式下保持可用
+        if (guessBtn) {
+            guessBtn.disabled = false;
+        }
+    } else {
+        // 多人模式，发送到服务器
+        socket.emit('makeGuess', { guess });
+        guessInput.disabled = true;
+        if (guessBtn) {
+            guessBtn.disabled = true;
+        }
     }
+    
     guessInput.value = '';
+}
+
+// 处理单人游戏猜测
+function handleSinglePlayerGuess(guess) {
+    if (!singlePlayerGame) return;
+    
+    singlePlayerGuessCount++;
+    
+    // 计算结果
+    const result = calculateSinglePlayerResult(guess, singlePlayerGame.targetNumber);
+    
+    // 保存猜测记录
+    singlePlayerGame.guesses.push({
+        guess,
+        result,
+        timestamp: Date.now()
+    });
+    
+    // 显示猜测结果
+    const row = document.createElement('tr');
+    row.className = 'my-guess';
+    row.innerHTML = `
+        <td>${playerName}</td>
+        <td>${guess}</td>
+        <td>${result.a}A${result.b}B</td>
+    `;
+    if (guessesBody) {
+        guessesBody.appendChild(row);
+        // 滚动到底部
+        guessesBody.parentElement.scrollTop = guessesBody.parentElement.scrollHeight;
+    }
+    
+    // 更新猜测次数
+    if (timerDisplay) {
+        timerDisplay.textContent = singlePlayerGuessCount;
+    }
+    
+    // 检查是否猜中
+    if (result.a === 4) {
+        // 游戏结束
+        handleSinglePlayerGameOver();
+    } else {
+        // 继续猜测，保持输入框可用
+        const guessInput = document.getElementById('guess-input');
+        if (guessInput) {
+            guessInput.focus();
+        }
+    }
+}
+
+// 处理单人游戏结束
+function handleSinglePlayerGameOver() {
+    if (!singlePlayerGame) return;
+    
+    singlePlayerGame.isGameOver = true;
+    
+    const gameTime = Math.floor((Date.now() - singlePlayerStartTime) / 1000);
+    const minutes = Math.floor(gameTime / 60);
+    const seconds = gameTime % 60;
+    const timeString = minutes > 0 ? `${minutes}分${seconds}秒` : `${seconds}秒`;
+    
+    // 显示游戏结束界面
+    showScreen('gameOver');
+    
+    // 更新游戏结束界面
+    if (gameResultTitle) {
+        gameResultTitle.textContent = '🎉 恭喜，你猜中了！';
+        gameResultTitle.className = 'winner';
+    }
+    
+    if (correctNumber) {
+        correctNumber.textContent = singlePlayerGame.targetNumber;
+    }
+    
+    // 显示所有猜测记录
+    if (finalGuessesBody) {
+        finalGuessesBody.innerHTML = '';
+        singlePlayerGame.guesses.forEach(guess => {
+            const row = document.createElement('tr');
+            row.className = 'my-guess';
+            row.innerHTML = `
+                <td>${playerName}</td>
+                <td>${guess.guess}</td>
+                <td>${guess.result.a}A${guess.result.b}B</td>
+            `;
+            finalGuessesBody.appendChild(row);
+        });
+    }
+    
+    // 添加游戏统计信息
+    const statsInfo = document.createElement('div');
+    statsInfo.className = 'single-player-stats';
+    statsInfo.innerHTML = `
+        <p>总猜测次数：<span class="highlight">${singlePlayerGuessCount}</span></p>
+        <p>游戏用时：<span class="highlight">${timeString}</span></p>
+    `;
+    
+    // 在游戏记录前插入统计信息
+    const finalGuessesContainer = document.getElementById('final-guesses-container');
+    if (finalGuessesContainer && !finalGuessesContainer.querySelector('.single-player-stats')) {
+        finalGuessesContainer.insertBefore(statsInfo, finalGuessesContainer.firstChild);
+    }
+    
+    // 播放胜利音效
+    if (victorySound) {
+        playSound(victorySound);
+    }
+    
+    // 修改"再来一局"按钮行为
+    if (restartBtn) {
+        restartBtn.textContent = '再来一局';
+        // 使用onclick直接设置，这样会覆盖之前的事件监听器
+        restartBtn.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleSinglePlayerRestart();
+        };
+    }
+    
+    // 修改"退出"按钮行为
+    if (exitBtn) {
+        // 使用onclick直接设置，这样会覆盖之前的事件监听器
+        exitBtn.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleSinglePlayerExit();
+        };
+    }
+    
+    // 隐藏restartStatus（单人模式不需要）
+    if (restartStatus) {
+        restartStatus.style.display = 'none';
+    }
+}
+
+// 单人游戏再来一局
+function handleSinglePlayerRestart() {
+    // 重置游戏状态
+    singlePlayerGuessCount = 0;
+    singlePlayerStartTime = Date.now();
+    singlePlayerGame = {
+        targetNumber: generateSinglePlayerTarget(),
+        guesses: [],
+        isGameOver: false
+    };
+    
+    console.log('[DEBUG] 单人游戏重新开始，新目标数字:', singlePlayerGame.targetNumber);
+    
+    // 返回游戏界面
+    showScreen('game');
+    updateUIForSinglePlayer();
+    
+    // 启用输入框
+    const guessInput = document.getElementById('guess-input');
+    const guessBtn = document.getElementById('guess-btn');
+    if (guessInput) {
+        guessInput.disabled = false;
+        guessInput.focus();
+    }
+    if (guessBtn) {
+        guessBtn.disabled = false;
+    }
+    
+    if (statusMessage) {
+        statusMessage.textContent = '开始猜测吧！';
+    }
+    
+    // 移除统计信息
+    const statsInfo = document.querySelector('.single-player-stats');
+    if (statsInfo) {
+        statsInfo.remove();
+    }
+}
+
+// 单人游戏退出
+function handleSinglePlayerExit() {
+    // 重置所有状态
+    isSinglePlayerMode = false;
+    singlePlayerGame = null;
+    singlePlayerGuessCount = 0;
+    singlePlayerStartTime = null;
+    playerName = null;
+    
+    // 清空猜测记录
+    if (guessesBody) guessesBody.innerHTML = '';
+    if (finalGuessesBody) finalGuessesBody.innerHTML = '';
+    
+    // 返回登录界面
+    showScreen('login');
+    showCreateRoomSection(true);
+    
+    // 重置输入框
+    if (playerNameInputCreate) {
+        playerNameInputCreate.value = '';
+    }
+    
+    // 移除统计信息
+    const statsInfo = document.querySelector('.single-player-stats');
+    if (statsInfo) {
+        statsInfo.remove();
+    }
 }
 
 // 这些事件监听器已经在 initializeEventListeners() 中绑定
@@ -620,7 +1211,8 @@ function submitGuess() {
 
 // 加入游戏成功
 socket.on('gameJoined', (data) => {
-    console.log('[CLIENT] 加入房间成功', data);
+    console.log('[CLIENT] ========== 收到 gameJoined 事件 ==========');
+    console.log('[CLIENT] 数据:', JSON.stringify(data, null, 2));
     
     if (!data) {
         console.error('[ERROR] gameJoined 数据为空');
@@ -629,9 +1221,33 @@ socket.on('gameJoined', (data) => {
     
     gameId = data.gameId;
     players = data.players || [];
+    isJoiningRoom = false; // 重置标志
+    
+    // 保存token（如果服务器返回了token）
+    if (data.token) {
+        playerToken = data.token;
+        savePlayerToken(gameId, data.token);
+        // 保存玩家名称，用于自动重连
+        try {
+            localStorage.setItem(`player_name_${gameId}`, playerName);
+        } catch (e) {
+            console.error('[ERROR] 保存玩家名称失败:', e);
+        }
+        console.log('[CLIENT] Token已保存:', data.token);
+    }
+    
+    console.log('[DEBUG] 当前 gameId:', gameId);
+    console.log('[DEBUG] 当前 players:', players);
+    console.log('[DEBUG] isFull:', data.isFull);
+    console.log('[DEBUG] waitingScreen 元素:', waitingScreen);
+    console.log('[DEBUG] loginScreen 元素:', loginScreen);
     
     // 隐藏房间状态消息
     hideRoomStatusMessage();
+    
+    // 清除所有错误消息
+    if (loginErrorCreate) loginErrorCreate.style.display = 'none';
+    if (loginErrorJoin) loginErrorJoin.style.display = 'none';
     
     // 更新URL
     const newUrl = `${window.location.origin}${window.location.pathname}?room=${gameId}`;
@@ -646,16 +1262,22 @@ socket.on('gameJoined', (data) => {
     // 更新邀请链接和二维码
     if (gameId && qrcodeContainer) {
         const inviteLink = `${window.location.origin}${window.location.pathname}?room=${gameId}`;
+        console.log('[DEBUG] 生成邀请链接:', inviteLink);
         generateQRCode(inviteLink);
     }
     
+    // 根据房间状态切换界面
     if (data.isFull) {
         console.log('[DEBUG] 房间已满，切换到游戏界面');
         showScreen('game');
     } else {
         console.log('[DEBUG] 房间未满，切换到等待界面');
+        console.log('[DEBUG] 调用 showScreen("waiting") 前，waitingScreen:', waitingScreen);
         showScreen('waiting');
+        console.log('[DEBUG] 调用 showScreen("waiting") 后，waitingScreen.classList:', waitingScreen ? waitingScreen.classList.toString() : 'null');
     }
+    
+    console.log('[CLIENT] ========== gameJoined 事件处理完成 ==========');
 });
 
 // 玩家加入
@@ -829,20 +1451,197 @@ socket.on('gameRestarted', () => {
 // 对手退出
 socket.on('opponentExited', (data) => {
     console.log('[CLIENT] 对手退出', data);
-    alert(`${data.playerName} 已退出游戏`);
-    showScreen('waiting');
-    stopTimer();
-    guessesBody.innerHTML = '';
+    // 这个事件在新的实现中已经被opponentLeft替代
+    // 但保留它用于向后兼容
+    if (statusMessage) {
+        statusMessage.textContent = `${data.playerName || '对手'}已退出游戏`;
+    }
 });
 
 // 对手断开连接
 socket.on('opponentDisconnected', (data) => {
     console.log('[CLIENT] 对手断开连接', data);
-    alert(`${data.playerName} 已断开连接`);
-    showScreen('waiting');
-    stopTimer();
-    guessesBody.innerHTML = '';
+    // 这个事件在新的实现中已经被opponentLeft替代
+    // 但保留它用于向后兼容
+    if (statusMessage) {
+        statusMessage.textContent = `${data.playerName || '对手'}已断开连接`;
+    }
 });
+
+// 对手退出 - 显示选择界面
+socket.on('opponentLeft', (data) => {
+    console.log('[CLIENT] 对手退出 - 显示选择界面', data);
+    stopTimer(); // 停止计时器
+    if (opponentLeftScreen && opponentNameDisplay) {
+        opponentNameDisplay.textContent = `${data.playerName || '对手'}已退出`;
+        showScreen('opponent-left');
+    }
+});
+
+// 等待重连
+socket.on('waitingForReconnect', (data) => {
+    console.log('[CLIENT] 等待对手重连', data);
+    showWaitingReconnectScreen(data.opponentName || '对手', data.timeout || 30);
+});
+
+// 重连成功
+socket.on('reconnectSuccess', (data) => {
+    console.log('[CLIENT] 重连成功', data);
+    
+    // 清理等待重连界面
+    if (reconnectTimeoutTimer) {
+        clearInterval(reconnectTimeoutTimer);
+        reconnectTimeoutTimer = null;
+    }
+    
+    gameId = data.gameId;
+    players = data.players || [];
+    
+    // 如果游戏正在进行，恢复游戏状态
+    if (data.gameState === 'playing') {
+        showScreen('game');
+        // 等待服务器发送yourTurn或waitForOpponent事件
+    } else {
+        // 游戏未开始，进入等待界面
+        showScreen('waiting');
+        if (currentPlayersDisplay) {
+            currentPlayersDisplay.textContent = `${players.length}/2`;
+        }
+        updatePlayersList(players);
+    }
+});
+
+// 对手重连成功
+socket.on('opponentReconnected', (data) => {
+    console.log('[CLIENT] 对手重连成功', data);
+    if (statusMessage) {
+        statusMessage.textContent = `${data.playerName || '对手'}已重新连接`;
+    }
+    // 如果当前在等待重连界面，关闭它
+    if (waitingReconnectScreen && !waitingReconnectScreen.classList.contains('hidden')) {
+        showScreen('game');
+    }
+});
+
+// 重连超时
+socket.on('reconnectTimeout', () => {
+    console.log('[CLIENT] 重连超时');
+    
+    // 清理等待重连界面
+    if (reconnectTimeoutTimer) {
+        clearInterval(reconnectTimeoutTimer);
+        reconnectTimeoutTimer = null;
+    }
+    
+    // 显示对手退出选择界面
+    if (opponentLeftScreen && opponentNameDisplay) {
+        opponentNameDisplay.textContent = '对手重连超时';
+        showScreen('opponent-left');
+    }
+});
+
+// 练习模式开始
+socket.on('practiceModeStarted', (data) => {
+    console.log('[CLIENT] 练习模式开始', data);
+    
+    isPracticeMode = true;
+    gameId = data.gameId;
+    players = data.players || [];
+    
+    // 确保playerName被设置（如果还没有）
+    if (!playerName && players.length > 0) {
+        playerName = players[0].name;
+    }
+    
+    // 切换到游戏界面
+    showScreen('game');
+    
+    // 更新界面
+    if (gamePlayersList) {
+        gamePlayersList.textContent = playerName || '玩家';
+    }
+    
+    if (statusMessage) {
+        statusMessage.textContent = '练习模式 - 开始猜测吧！';
+    }
+    
+    // 清空猜测记录
+    if (guessesBody) {
+        guessesBody.innerHTML = '';
+    }
+    
+    // 确保输入框和按钮可用
+    const guessInput = document.getElementById('guess-input');
+    const guessBtn = document.getElementById('guess-btn');
+    if (guessInput) {
+        guessInput.disabled = false;
+        guessInput.focus();
+    }
+    if (guessBtn) {
+        guessBtn.disabled = false;
+    }
+    
+    // 更新计时器显示（练习模式下不显示倒计时）
+    if (timerDisplay) {
+        const gameInfo = document.querySelector('.game-info');
+        if (gameInfo) {
+            const infoItems = gameInfo.querySelectorAll('.info-item');
+            if (infoItems.length > 1 && infoItems[1]) {
+                const label = infoItems[1].querySelector('span:first-child');
+                if (label) {
+                    label.textContent = '练习模式：';
+                }
+                if (timerDisplay) {
+                    timerDisplay.textContent = '无限制';
+                }
+            }
+        }
+    }
+});
+
+// Token验证失败 - 房间等待原玩家重连
+socket.on('tokenRequired', (data) => {
+    console.log('[CLIENT] Token验证失败 - 房间等待原玩家重连', data);
+    if (loginErrorJoin) {
+        showError(loginErrorJoin, data.message || '房间正在等待原玩家重连，无法加入');
+    }
+    if (roomStatusMessage) {
+        showRoomStatusMessage(data.message || '房间正在等待原玩家重连，无法加入', 'error');
+    }
+});
+
+// 显示等待重连界面
+function showWaitingReconnectScreen(opponentName, timeout) {
+    if (!waitingReconnectScreen) return;
+    
+    if (reconnectOpponentName) {
+        reconnectOpponentName.textContent = `等待${opponentName}重连...`;
+    }
+    
+    let timeLeft = timeout || 30;
+    if (reconnectTimer) {
+        reconnectTimer.textContent = timeLeft;
+    }
+    
+    showScreen('waiting-reconnect');
+    
+    // 开始倒计时
+    if (reconnectTimeoutTimer) {
+        clearInterval(reconnectTimeoutTimer);
+    }
+    
+    reconnectTimeoutTimer = setInterval(() => {
+        timeLeft--;
+        if (reconnectTimer) {
+            reconnectTimer.textContent = timeLeft;
+        }
+        if (timeLeft <= 0) {
+            clearInterval(reconnectTimeoutTimer);
+            reconnectTimeoutTimer = null;
+            // 服务器会发送reconnectTimeout事件，这里不需要额外处理
+        }
+    }, 1000);
+}
 
 // 显示等待界面
 socket.on('showWaiting', () => {
@@ -873,10 +1672,52 @@ socket.on('connect_error', (error) => {
 
 // 页面加载时自动检测房间
 function initRoomDetection() {
+    // 如果正在加入房间，不执行自动检测
+    if (isJoiningRoom) {
+        console.log('[DEBUG] 正在加入房间，跳过自动检测');
+        return;
+    }
+    
     const roomId = getRoomIdFromURL();
     
     if (roomId) {
         console.log('[DEBUG] 检测到URL中的房间ID:', roomId);
+        
+        // 检查是否有保存的token（尝试自动重连）
+        const savedToken = getPlayerToken(roomId);
+        if (savedToken) {
+            console.log('[DEBUG] 检测到保存的token，尝试自动重连');
+            // 尝试从localStorage获取玩家名称
+            const savedPlayerName = localStorage.getItem(`player_name_${roomId}`);
+            if (savedPlayerName && playerNameInputJoin) {
+                playerNameInputJoin.value = savedPlayerName;
+                playerName = savedPlayerName;
+            }
+            
+            // 显示加入房间界面
+            showCreateRoomSection(false);
+            
+            // 自动填充房间ID
+            if (gameIdInput) {
+                gameIdInput.value = roomId;
+                gameIdInput.readOnly = true;
+            }
+            
+            if (roomIdHint) {
+                roomIdHint.style.display = 'block';
+            }
+            
+            // 自动尝试重连
+            if (!socket.connected) {
+                socket.connect();
+                socket.once('connect', () => {
+                    socket.emit('joinGame', { gameId: roomId, playerName: savedPlayerName || '', token: savedToken });
+                });
+            } else {
+                socket.emit('joinGame', { gameId: roomId, playerName: savedPlayerName || '', token: savedToken });
+            }
+            return;
+        }
         
         // 显示加入房间界面
         showCreateRoomSection(false);

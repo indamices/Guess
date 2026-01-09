@@ -27,6 +27,10 @@
                     <span>或</span>
                 </div>
                 <button id="switch-to-join-btn" class="btn btn-secondary">加入已有房间</button>
+                <div class="divider">
+                    <span>或</span>
+                </div>
+                <button id="single-player-btn" class="btn btn-success">单人游戏</button>
                 <div id="login-error-create" class="error-message"></div>
             </div>
 
@@ -70,6 +74,34 @@
                         <div id="qrcode"></div>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- 对手退出选择界面 -->
+        <div id="opponent-left-screen" class="screen hidden">
+            <div class="card">
+                <h2>对手已退出</h2>
+                <div class="opponent-info">
+                    <p id="opponent-name-display"></p>
+                    <p>请选择操作：</p>
+                </div>
+                <div class="action-buttons">
+                    <button id="wait-opponent-btn" class="btn btn-primary">等待玩家重连</button>
+                    <button id="practice-mode-btn" class="btn btn-info">继续独自练习</button>
+                    <button id="quit-game-btn" class="btn btn-danger">退出游戏</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 等待重连界面 -->
+        <div id="waiting-reconnect-screen" class="screen hidden">
+            <div class="card">
+                <h2>等待对手重连...</h2>
+                <div class="reconnect-info">
+                    <p id="reconnect-opponent-name"></p>
+                    <p>等待剩余时间：<span id="reconnect-timer" class="timer">30</span>秒</p>
+                </div>
+                <div class="loading-spinner"></div>
             </div>
         </div>
 
